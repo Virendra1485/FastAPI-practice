@@ -1,10 +1,42 @@
-from fastapi import FastAPI, status, Body, Cookie, File, UploadFile, Form, HTTPException
+from fastapi import FastAPI, status, Body, Cookie, File, UploadFile, Form, HTTPException, APIRouter, Depends
 from fastapi.responses import JSONResponse
 from typing import Optional, List, Dict, Union
 from typing_extensions import Annotated
 from pydantic import BaseModel, Field
+from sqlalchemy import create_engine, Column, Integer, String
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+
+SQLALCHEMY_DATABASE_URL = "sqlite:///./sql_app.db"
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+Base = declarative_base()
+
+
+class Item(Base):
+    __tablename__ = "item"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, index=True)
+    description = Column(String, index=True)
+
+    def __init__(self, data):
+        self.id = data.get("id")
+        self.title = data.get("title")
+        self.description = data.get("description")
+
+
+Base.metadata.create_all(engine)
 
 app = FastAPI()
+api_router = APIRouter()
+
+item_router = APIRouter(prefix="/testing")
+# app.include_router(api_router, prefix="/test")
+api_router.include_router(item_router, tags=["Item"])
 
 
 @app.get("/")
