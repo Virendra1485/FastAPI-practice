@@ -13,3 +13,15 @@ class Item(Base):
         self.id = data.get("id")
         self.title = data.get("title")
         self.description = data.get("description")
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    email = Column(String, unique=True)
+    password = Column(String)
+
+    def __init__(self, data):
+        self.email = data.get("email")
+        self.password = data.get("password")
