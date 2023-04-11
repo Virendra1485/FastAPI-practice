@@ -39,3 +39,17 @@ class TokenSchema(BaseModel):
     access_token: str
     refresh_token: str
 
+
+class ProductCreateSchema(BaseModel):
+    name: str
+    category: str
+
+    class Config:
+        orm_mode = True
+
+
+class ProductSchema(ProductCreateSchema):
+    id: int
+
+    class Config:
+        orm_mode = True

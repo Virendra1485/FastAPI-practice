@@ -1,0 +1,8 @@
+uvicorn==0.21.1
+fastapi==0.95.0
+PyJWT==1.7.1
+fastapi-mail==1.2.6
+SQLAlchemy==2.0.7
+passlib==1.7.4
+fastapi-utils==0.2.1
+python-multipart==0.0.6

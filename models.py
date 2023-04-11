@@ -25,3 +25,15 @@ class User(Base):
     def __init__(self, data):
         self.email = data.get("email")
         self.password = data.get("password")
+
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    category = Column(String)
+
+    def __init__(self, data):
+        self.name = data.get("name")
+        self.category = data.get("category")

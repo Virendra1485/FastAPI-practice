@@ -1,19 +1,24 @@
 import jwt
 import time
 from typing import List
-from fastapi import APIRouter, Depends, status, HTTPException, BackgroundTasks, Header, Request
+from fastapi import APIRouter, Depends, status, HTTPException, BackgroundTasks, Request, WebSocket
 from fastapi_mail import MessageSchema
 from sqlalchemy.orm import Session
 from database import get_db
-from models import Item, User
-from schema import ItemSchema, ItemCreateSchema, UserCreateSchema, UserSchema, TokenSchema
+from models import Item, User, Product
+from schema import ItemSchema, ItemCreateSchema, UserCreateSchema, UserSchema, TokenSchema, ProductSchema, \
+    ProductCreateSchema
 from config import fast_mail
 from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime, timedelta
 from passlib.hash import bcrypt
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi_utils.cbv import cbv
+from fastapi_utils.inferring_router import InferringRouter
 
-item_router = APIRouter(tags=["item"])
+
+item_router = APIRouter(tags=["Item"])
+product_router = InferringRouter(tags=["Products"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -61,11 +66,11 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 
 @item_router.get("/test_router")
-async def test():
+def test():
     return {"hello": "hello"}
 
 
-async def back_task(hello: str, tata: str):
+def back_task(hello: str, tata: str):
     template = """
                 <html>
                 <body>
@@ -84,20 +89,20 @@ async def back_task(hello: str, tata: str):
         body=template,
         subtype="html"
     )
-    await fast_mail.send_message(message)
+    fast_mail.send_message(message)
     print(hello, tata)
 
 
 @item_router.get("/items/", response_model=List[ItemSchema], status_code=status.HTTP_200_OK,
                  dependencies=[Depends(JWTBearer())])
-async def read_items(background_task: BackgroundTasks, db: Session = Depends(get_db)):
+def read_items(background_task: BackgroundTasks, db: Session = Depends(get_db)):
     background_task.add_task(back_task, "hello", "tata")
     items = db.query(Item).all()
     return items
 
 
 @item_router.post("/items/", response_model=ItemSchema, status_code=status.HTTP_201_CREATED)
-async def create_item(item: ItemCreateSchema, db: Session = Depends(get_db)):
+def create_item(item: ItemCreateSchema, db: Session = Depends(get_db)):
     item_instance = Item(item.dict())
     db.add(item_instance)
     db.commit()
@@ -106,7 +111,7 @@ async def create_item(item: ItemCreateSchema, db: Session = Depends(get_db)):
 
 
 @item_router.get("/item/{item_id}", response_model=ItemSchema, status_code=status.HTTP_200_OK)
-async def get_item(item_id: int, db: Session = Depends(get_db)):
+def get_item(item_id: int, db: Session = Depends(get_db)):
     item = db.query(Item).filter(Item.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Item not Found")
@@ -114,7 +119,7 @@ async def get_item(item_id: int, db: Session = Depends(get_db)):
 
 
 @item_router.patch("/item/{item_id}", response_model=ItemSchema, status_code=status.HTTP_200_OK)
-async def update_item(item_id: int, item: ItemCreateSchema, db: Session = Depends(get_db)):
+def update_item(item_id: int, item: ItemCreateSchema, db: Session = Depends(get_db)):
     instance = db.query(Item).filter(Item.id == item_id).first()
     if not instance:
         raise HTTPException(status_code=404, detail="Item not Found")
@@ -127,7 +132,7 @@ async def update_item(item_id: int, item: ItemCreateSchema, db: Session = Depend
 
 
 @item_router.delete("/item/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_item(item_id: int, db: Session = Depends(get_db)):
+def delete_item(item_id: int, db: Session = Depends(get_db)):
     instance = db.query(Item).filter(Item.id == item_id).first()
     if not instance:
         raise HTTPException(status_code=404, detail="Item not Found")
@@ -138,7 +143,7 @@ async def delete_item(item_id: int, db: Session = Depends(get_db)):
 
 
 @item_router.post("/user/sign_up", status_code=status.HTTP_201_CREATED, response_model=UserSchema)
-async def user_create(user: UserCreateSchema, db: Session = Depends(get_db)):
+def user_create(user: UserCreateSchema, db: Session = Depends(get_db)):
     if db.query(User).filter_by(email=user.email).first():
         raise HTTPException(status_code=400, detail="User already exist")
     user_instance = User(user.dict())
@@ -151,7 +156,7 @@ async def user_create(user: UserCreateSchema, db: Session = Depends(get_db)):
 
 def create_access_token(data: dict) -> str:
     import app
-    expire = datetime.utcnow() + timedelta(minutes=15)
+    expire = datetime.utcnow() + timedelta(hours=15)
     data.update({"exp": expire})
     access_token = jwt.encode(data, app.jwt_secret_key, algorithm="HS256")
     return access_token
@@ -166,7 +171,7 @@ def create_refresh_token(data: dict) -> str:
 
 
 @item_router.post("/user/sign_in", status_code=status.HTTP_200_OK, response_model=TokenSchema)
-async def user_sign_in(user: UserCreateSchema, db: Session = Depends(get_db)):
+def user_sign_in(user: UserCreateSchema, db: Session = Depends(get_db)):
     user_instance = db.query(User).filter(User.email == user.email).first()
     if not user_instance:
         raise HTTPException(status_code=400, detail="User not found.")
@@ -175,3 +180,64 @@ async def user_sign_in(user: UserCreateSchema, db: Session = Depends(get_db)):
     access_token = create_access_token({"sub": user_instance.email})
     refresh_token = create_refresh_token({"sub": user_instance.email})
     return {"access_token": access_token, "refresh_token": refresh_token}
+
+
+@cbv(product_router)
+class ProductCbv:
+    db: Session = Depends(get_db)
+
+    @product_router.get("/product_get", response_model=List[ProductSchema], status_code=status.HTTP_200_OK,
+                        dependencies=[Depends(JWTBearer())])
+    def get_all_product(self):
+        product = self.db.query(Product).all()
+        return product
+
+    @product_router.post("/product", response_model=ProductSchema, status_code=status.HTTP_201_CREATED,
+                         dependencies=[Depends(JWTBearer())])
+    def post(self, product: ProductCreateSchema):
+        product_instance = Product(product.dict())
+        self.db.add(product_instance)
+        self.db.commit()
+        self.db.refresh(product_instance)
+        return product_instance
+
+    @product_router.get("/product/{product_id}", response_model=ProductSchema, status_code=status.HTTP_200_OK,
+                        dependencies=[Depends(JWTBearer())])
+    def get(self, product_id: int):
+        product = self.db.query(Product).get(product_id)
+        if product:
+            return product
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    @product_router.patch("/product/{product_id}", response_model=ProductSchema, status_code=status.HTTP_200_OK,
+                          dependencies=[Depends(JWTBearer())])
+    def update_product(self, product_id: int, product: ProductCreateSchema):
+        instance = self.db.query(Product).get(product_id)
+        if not instance:
+            raise HTTPException(status_code=404, detail="Product not Found")
+        for key, value in product.dict().items():
+            setattr(instance, key, value)
+        self.db.add(instance)
+        self.db.commit()
+        self.db.refresh(instance)
+        return instance
+
+    @product_router.delete("/product/{product_id}", status_code=status.HTTP_204_NO_CONTENT,
+                           dependencies=[Depends(JWTBearer())])
+    def delete_item(self, product_id: int):
+        instance = self.db.query(Product).get(product_id)
+        if not instance:
+            raise HTTPException(status_code=404, detail="Product not Found")
+
+        self.db.delete(instance)
+        self.db.commit()
+        return {"message": "Item deleted successfully"}
+
+
+@item_router.websocket("/chat")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    while True:
+        data = await websocket.receive_text()
+        await websocket.send_text(f"Your Response -------------{data}")
+        await websocket.close()
