@@ -1,11 +1,12 @@
 import time
 
-from fastapi import FastAPI, Request, WebSocket
+from fastapi import FastAPI, Request
 from item_route import item_router
 from database import engine
 from models import *
 from item_route import product_router
 from fastapi_utils.tasks import repeat_every
+
 Base.metadata.create_all(engine)
 app = FastAPI()
 secret_key = "sdfdjflksjflksdlfkjlk"
@@ -27,6 +28,3 @@ async def add_process_time_header(request: Request, call_next):
     process_time = time.time() - start_time
     response.headers["X-Process-Time"] = str(process_time)
     return response
-
-
-
